@@ -221,6 +221,9 @@ export default function MedicineScreen() {
         onScroll={scrollbar.onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        directionalLockEnabled={true}
       >
         <View style={styles.topRow}>
           <Pressable
@@ -351,7 +354,7 @@ function InfoRow({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F7FB" },
+  screen: { flex: 1, backgroundColor: "#F6F7FB", overflow: "hidden" },
   container: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 },
   topRow: { flexDirection: "row", justifyContent: "flex-start" },
   iconButton: {

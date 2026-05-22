@@ -1,20 +1,20 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    useWindowDimensions,
-    View,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 
 type Props = {
@@ -159,9 +159,7 @@ function WheelColumn({
       >
         {repeatedOptions.map((option, index) => {
           const isSelected =
-            options.length > 0 &&
-            option === value &&
-            index % options.length === selectedIndex;
+            options.length > 0 && index % options.length === selectedIndex;
 
           return (
             <TouchableOpacity
@@ -211,7 +209,13 @@ export function TimePickerModal({ open, value, onCancel, onConfirm }: Props) {
       visible={open}
       onRequestClose={onCancel}
     >
-      <Pressable style={styles.overlay} onPress={onCancel}>
+      <Pressable
+        style={styles.overlay}
+        onPress={onCancel}
+        // capture touches so background content doesn't scroll while modal is open
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+      >
         <Pressable style={styles.card} onPress={() => {}}>
           <Text style={styles.title}>Select Time</Text>
 
@@ -235,7 +239,7 @@ export function TimePickerModal({ open, value, onCancel, onConfirm }: Props) {
             <WheelColumn
               options={PERIOD_OPTIONS}
               value={selectedPeriod}
-              onChange={setSelectedPeriod}
+              onChange={(value) => setSelectedPeriod(value as Period)}
               width={isCompact ? 52 : PERIOD_COLUMN_WIDTH}
             />
           </View>
@@ -276,16 +280,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 12,
-    paddingTop: 24,
-    paddingBottom: 18,
   },
   card: {
     backgroundColor: "#fff",
     borderRadius: 18,
     padding: 12,
-    width: "100%",
-    maxWidth: 380,
+    width: "90%",
+    maxWidth: 340,
     maxHeight: "76%",
     alignSelf: "center",
     overflow: "hidden",
@@ -304,6 +307,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 8,
     marginTop: 6,
+    gap: 4,
   },
   wheelColumn: {
     position: "relative",

@@ -18,6 +18,7 @@ import {
     useDraggableScrollbar,
 } from "../components/custom-scrollbar";
 import { DecorativeBackground } from "../components/decorative-background";
+import { TimePickerModal } from "../components/time-picker";
 import { Colors } from "../constants/theme";
 import { useScreenDataCache } from "../hooks/use-screen-data-cache";
 import { useThemeContext } from "../hooks/use-theme-context";
@@ -270,6 +271,56 @@ export default function EditMedicineScreen() {
     setDateModalVisible(true);
   };
 
+  const timeStringToDate = (time: string) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(time);
+    const date = new Date();
+    if (!match) {
+      date.setHours(8, 0, 0, 0);
+      return date;
+    }
+
+    date.setHours(
+      Number.parseInt(match[1], 10),
+      Number.parseInt(match[2], 10),
+      0,
+      0,
+    );
+    return date;
+  };
+
+  const dateToTimeString = (date: Date) =>
+    `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes(),
+    ).padStart(2, "0")}`;
+
+  const displayTime = (t: string) => {
+    if (!t) return t;
+    const [hh, mm] = t.split(":");
+    if (hh == null) return t;
+    const h = parseInt(hh, 10);
+    const ampm = h >= 12 ? "PM" : "AM";
+    const hour12 = ((h + 11) % 12) + 1;
+    return `${String(hour12).padStart(2, "0")}:${mm} ${ampm}`;
+  };
+
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+
+  const openTimeModal = () => {
+    setTimePickerOpen(true);
+  };
+
+  const addMedicineTime = (date: Date) => {
+    const nextTime = dateToTimeString(date);
+    if (!nextTime) return false;
+    if (medicineTimes.includes(nextTime)) return false;
+    setMedicineTimes((cur) => [...cur, nextTime]);
+    return true;
+  };
+
+  const removeMedicineTime = (t: string) => {
+    setMedicineTimes((cur) => cur.filter((x) => x !== t));
+  };
+
   const handleDateSelect = (selectedDate: string) => {
     if (isMaintenance) {
       setDraftStartDate(selectedDate);
@@ -319,7 +370,9 @@ export default function EditMedicineScreen() {
 
     setSubmitError("");
 
-    const nextTimes = FREQUENCY_TIMES[frequency] ?? medicineTimes;
+    const nextTimes = medicineTimes.length
+      ? medicineTimes
+      : (FREQUENCY_TIMES[frequency] ?? medicineTimes);
     const updates = {
       name,
       dosage: dosageValue,
@@ -372,6 +425,9 @@ export default function EditMedicineScreen() {
         onScroll={scrollbar.onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        directionalLockEnabled={true}
       >
         <View style={styles.headerRow}>
           <Pressable
@@ -501,6 +557,28 @@ export default function EditMedicineScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Times list and Add Time button (editable) */}
+        <View style={{ marginTop: 6 }}>
+          {medicineTimes.map((t) => (
+            <View key={t} style={styles.timeCard}>
+              <View style={styles.timeLeft}>
+                <MaterialIcons name="schedule" size={22} color="#3F7AE0" />
+                <Text style={styles.timeText}>{displayTime(t)}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => removeMedicineTime(t)}
+                style={styles.removeBtn}
+              >
+                <MaterialIcons name="close" size={18} color="#6B6F78" />
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          <TouchableOpacity style={styles.addTimeBtn} onPress={openTimeModal}>
+            <Text style={styles.addTimeText}>+ Add Time</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
@@ -589,6 +667,20 @@ export default function EditMedicineScreen() {
           <Text style={styles.buttonText}>Save Changes</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <TimePickerModal
+        open={timePickerOpen}
+        value={timeStringToDate(
+          medicineTimes[medicineTimes.length - 1] ?? "08:00",
+        )}
+        onCancel={() => setTimePickerOpen(false)}
+        onConfirm={(date: Date) => {
+          if (addMedicineTime(date)) {
+            setTimePickerOpen(false);
+          }
+        }}
+        themeMode={currentTheme === "dark" ? "dark" : "light"}
+      />
 
       <DraggableScrollbarOverlay {...scrollbar} />
 
@@ -798,7 +890,7 @@ export default function EditMedicineScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F7FB" },
+  screen: { flex: 1, backgroundColor: "#F6F7FB", overflow: "hidden" },
   centered: { justifyContent: "center", alignItems: "center" },
   loadingText: { fontWeight: "700" },
   container: { padding: 18, paddingTop: 20, paddingBottom: 28 },
@@ -1016,4 +1108,28 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   modalConfirmText: { color: "#FFFFFF", fontWeight: "700" },
+  timeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E9F0",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    marginBottom: 12,
+  },
+  timeLeft: { flexDirection: "row", alignItems: "center" },
+  timeText: { marginLeft: 12, fontSize: 16, fontWeight: "700" },
+  removeBtn: { padding: 6, borderRadius: 8 },
+  addTimeBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#6D57D9",
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 18,
+  },
+  addTimeText: { color: "#6D57D9", fontWeight: "700" },
 });

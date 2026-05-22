@@ -2,17 +2,17 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
-    DraggableScrollbarOverlay,
-    useDraggableScrollbar,
+  DraggableScrollbarOverlay,
+  useDraggableScrollbar,
 } from "../components/custom-scrollbar";
 import { DecorativeBackground } from "../components/decorative-background";
 import { TimePickerModal } from "../components/time-picker";
@@ -212,6 +212,11 @@ export default function ScheduleScreen() {
         onScroll={scrollbar.onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!timePickerOpen}
+        bounces={false}
+        overScrollMode="never"
+        directionalLockEnabled={true}
       >
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -242,13 +247,15 @@ export default function ScheduleScreen() {
           </View>
         ))}
 
-        <TouchableOpacity style={styles.addTimeBtn} onPress={openTimeModal}>
-          <Text style={styles.addTimeText}>+ Add Time</Text>
-        </TouchableOpacity>
+        <View style={styles.actionGroup}>
+          <TouchableOpacity style={styles.addTimeBtn} onPress={openTimeModal}>
+            <Text style={styles.addTimeText}>+ Add Time</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchedule}>
-          <Text style={styles.saveText}>Save Schedule</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchedule}>
+            <Text style={styles.saveText}>Save Schedule</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       <TimePickerModal
@@ -273,8 +280,8 @@ export default function ScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F7FB" },
-  container: { padding: 18, paddingTop: 20, paddingBottom: 28 },
+  screen: { flex: 1, backgroundColor: "#F6F7FB", overflow: "hidden" },
+  container: { padding: 18, paddingTop: 20, paddingBottom: 120 },
   headerRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   backButton: {
     width: 36,
@@ -320,6 +327,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#5D49CF",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 8,
   },
   saveText: { color: "#fff", fontWeight: "700" },
   modalOverlay: {
@@ -408,4 +416,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#5D49CF",
   },
   modalConfirmText: { color: "#fff", fontWeight: "700" },
+  actionGroup: {
+    marginTop: 12,
+  },
 });

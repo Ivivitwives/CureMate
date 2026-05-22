@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useFocusEffect } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -26,6 +27,7 @@ import { auth } from "../../firebaseConfig";
 import { useScreenDataCache } from "../../hooks/use-screen-data-cache";
 import { useThemeContext } from "../../hooks/use-theme-context";
 import {
+  getCompletedMedicinesCount,
   getTodayLogsFirebase,
   markLogAsTaken,
 } from "../../services/firebaseService";
@@ -101,6 +103,7 @@ export default function HomeScreen() {
   const [logs, setLogs] = useState<Log[]>(
     () => (homeLogs as Log[] | null) ?? [],
   );
+  const [completedCount, setCompletedCount] = useState(0);
   const [loading, setLoading] = useState(!homeLogs);
   const [refreshing, setRefreshing] = useState(false);
   const [notifying, setNotifying] = useState(false);
@@ -141,12 +144,14 @@ export default function HomeScreen() {
         await markMissedLogs();
 
         const todayLogs = (await getTodayLogsFirebase()) as Log[];
+        const nextCompletedCount = await getCompletedMedicinesCount();
         const unique = Array.from(
           new Map(todayLogs.map((log) => [log.id, log])).values(),
         );
 
         setHomeLogs(unique);
         setLogs(unique);
+        setCompletedCount(nextCompletedCount);
       } catch (error) {
         console.error("Error loading logs:", error);
         Alert.alert("Error", "Failed to load medicines");
@@ -158,9 +163,11 @@ export default function HomeScreen() {
     [homeLoadedVersion, homeLogs, homeVersion, setHomeLogs],
   );
 
-  useEffect(() => {
-    void loadLogs();
-  }, [loadLogs]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadLogs({ force: true });
+    }, [loadLogs]),
+  );
 
   const handleMarkTaken = async (id: string) => {
     try {
@@ -368,6 +375,26 @@ export default function HomeScreen() {
                   style={[styles.statLabel, { color: theme.textSecondary }]}
                 >
                   Missed
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.statCard,
+                  styles.completedCard,
+                  {
+                    backgroundColor: theme.success + "12",
+                    borderColor: theme.success,
+                  },
+                ]}
+              >
+                <Text style={[styles.statNumber, { color: theme.success }]}>
+                  {completedCount}
+                </Text>
+                <Text
+                  style={[styles.statLabel, { color: theme.textSecondary }]}
+                  numberOfLines={2}
+                >
+                  Completed Doses
                 </Text>
               </View>
             </View>
@@ -648,15 +675,17 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     marginBottom: 20,
   },
   statCard: {
-    width: "31.5%",
+    width: "48%",
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
+    marginBottom: 12,
   },
   toTakeCard: {
     borderColor: "#B9C9DE",
@@ -669,6 +698,10 @@ const styles = StyleSheet.create({
   missedCard: {
     borderColor: "#E8CDD2",
     backgroundColor: "#FAF0F2",
+  },
+  completedCard: {
+    borderColor: "#C8E8D7",
+    backgroundColor: "#F0FAF5",
   },
   statNumber: {
     fontSize: 32,

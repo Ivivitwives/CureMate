@@ -340,11 +340,89 @@ export const getMedicines = async (): Promise<any[]> => {
  * Update a medicine
  */
 export const updateMedicine = async (medicineId: string, updates: any) => {
-  const userId = getCurrentUserId();
+  let userId = getCurrentUserId();
+  if (!userId) {
+    // Try waiting briefly for auth to become available (handles cold start)
+    userId = await waitForCurrentUserIdWithTimeout(5000);
+  }
+
   if (!userId) throw new Error("User not authenticated");
 
+  // Normalize times and notes if provided
+  const normalizedTimes = Array.isArray(updates.times)
+    ? updates.times.map((t: any) => normalizeTimeStr(t))
+    : undefined;
+
+  const normalizedNotes =
+    typeof updates.notes === "string" ? updates.notes.trim() : undefined;
+
   const medicineRef = doc(getDb(), "users", userId, "medicines", medicineId);
-  await updateDoc(medicineRef, updates);
+
+  const payload: any = { ...updates };
+  if (normalizedTimes !== undefined) payload.times = normalizedTimes;
+  if (normalizedNotes !== undefined) payload.notes = normalizedNotes;
+  payload.updatedAt = serverTimestamp();
+
+  await updateDoc(medicineRef, payload);
+  // Sync display fields on existing logs so home/today views reflect edits
+  try {
+    const logsQuery = query(
+      collection(getDb(), "users", userId, "logs"),
+      where("medicineId", "==", medicineId),
+    );
+    const logsSnap = await getDocs(logsQuery);
+    for (const logDoc of logsSnap.docs) {
+      const updatesForLog: any = {};
+      if (payload.name !== undefined) updatesForLog.medicineName = payload.name;
+      if (payload.dosage !== undefined) updatesForLog.dosage = payload.dosage;
+      if (Object.keys(updatesForLog).length > 0) {
+        try {
+          await updateDoc(logDoc.ref, updatesForLog);
+        } catch (err) {
+          console.warn("Failed to sync log", logDoc.id, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to query or update logs for medicine sync", err);
+  }
+
+  // Remove outdated future/today logs whose time is no longer in the updated schedule
+  try {
+    const normalizedTimesForMatch = Array.isArray(payload.times)
+      ? payload.times.map((t: any) => normalizeTimeStr(t))
+      : undefined;
+
+    // Delete all future/today logs for this medicine, then regenerate so old times are removed
+    const today = toIsoDate(new Date());
+    const allMedicineLogsQuery = query(
+      collection(getDb(), "users", userId, "logs"),
+      where("medicineId", "==", medicineId),
+    );
+
+    const allMedicineLogsSnap = await getDocs(allMedicineLogsQuery);
+    for (const logDoc of allMedicineLogsSnap.docs) {
+      const data = logDoc.data() as any;
+      const logDate = String(data.date ?? "");
+      if (logDate >= today) {
+        try {
+          await deleteDoc(logDoc.ref);
+        } catch (err) {
+          console.warn("Failed to delete future log", logDoc.id, err);
+        }
+      }
+    }
+
+    // Rebuild logs for the medicine's date range (at least today) to ensure new times exist
+    try {
+      const regenEnd = payload.endDate ?? today;
+      await buildLogsForRange(regenEnd);
+    } catch (err) {
+      console.warn("Failed to regenerate logs after medicine update", err);
+    }
+  } catch (err) {
+    console.warn("Failed to cleanup or regenerate logs for medicine", err);
+  }
 };
 
 /**
@@ -606,4 +684,59 @@ export const getAllLogs = async (limit: number = 100) => {
     .slice(0, limit);
 
   return dedupeLogs(allLogs);
+};
+
+/**
+ * Get the number of medicines that have completed their full schedule.
+ * A medicine is counted when it has an end date, that end date is today or earlier,
+ * and every log up to that end date is marked taken.
+ */
+export const getCompletedMedicinesCount = async () => {
+  const userId = getCurrentUserId();
+  if (!userId) return 0;
+
+  const medicines = await getMedicines();
+  const today = toIsoDate(new Date());
+  const allLogs = await getAllLogs(10000);
+
+  const logsByMedicineId = new Map<string, any[]>();
+  for (const log of allLogs) {
+    const medicineId = String(log.medicineId ?? "");
+    if (!medicineId) continue;
+    const current = logsByMedicineId.get(medicineId) ?? [];
+    current.push(log);
+    logsByMedicineId.set(medicineId, current);
+  }
+
+  let completedCount = 0;
+
+  for (const medicine of medicines) {
+    if (!medicine?.id || medicine.isMaintenance) {
+      continue;
+    }
+
+    const endDate = String(medicine.endDate ?? "");
+    if (!endDate || endDate > today) {
+      continue;
+    }
+
+    const medicineLogs = logsByMedicineId.get(medicine.id) ?? [];
+    const relevantLogs = medicineLogs.filter(
+      (log) => String(log.date ?? "") <= endDate,
+    );
+
+    if (relevantLogs.length === 0) {
+      continue;
+    }
+
+    const allTaken = relevantLogs.every(
+      (log) => String(log.status ?? "").toLowerCase() === "taken",
+    );
+
+    if (allTaken) {
+      completedCount += 1;
+    }
+  }
+
+  return completedCount;
 };
