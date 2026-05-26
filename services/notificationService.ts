@@ -1,4 +1,35 @@
 import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+import { getTodayLogsFirebase } from "./firebaseService";
+
+const ANDROID_CHANNEL_ID = "medicine-reminders";
+
+let androidChannelSetupPromise: Promise<void> | null = null;
+
+async function ensureAndroidNotificationChannel() {
+  if (Platform.OS !== "android") {
+    return;
+  }
+
+  if (!androidChannelSetupPromise) {
+    androidChannelSetupPromise = Notifications.setNotificationChannelAsync(
+      ANDROID_CHANNEL_ID,
+      {
+        name: "Medicine reminders",
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#5B4BE0",
+      },
+    ).then(() => undefined);
+  }
+
+  try {
+    await androidChannelSetupPromise;
+  } catch (error) {
+    androidChannelSetupPromise = null;
+    console.warn("Failed to configure notification channel", error);
+  }
+}
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -63,6 +94,8 @@ export async function requestAndScheduleForLogs(logs: any[] = []) {
   const granted = await requestPermissions();
   if (!granted) throw new Error("Notifications permission not granted");
 
+  await ensureAndroidNotificationChannel();
+
   let scheduled = 0;
   const now = new Date();
 
@@ -78,6 +111,7 @@ export async function requestAndScheduleForLogs(logs: any[] = []) {
         title: `Time for ${log.medicineName ?? "medicine"}`,
         body: `Take ${log.dosage ?? ""}`,
         data: { logId: log.id ?? null },
+        ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : {}),
       } as any;
 
       // Schedule using a relative seconds trigger to satisfy types across platforms
@@ -98,8 +132,17 @@ export async function requestAndScheduleForLogs(logs: any[] = []) {
   return scheduled;
 }
 
+export async function rescheduleTodayNotifications() {
+  await cancelAllScheduled();
+  await ensureAndroidNotificationChannel();
+  const logs = await getTodayLogsFirebase();
+  if (!logs || logs.length === 0) return 0;
+  return requestAndScheduleForLogs(logs);
+}
+
 export default {
   requestPermissions,
   cancelAllScheduled,
   requestAndScheduleForLogs,
+  rescheduleTodayNotifications,
 };

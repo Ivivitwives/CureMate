@@ -1,21 +1,22 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useNavigation } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Alert,
-    Keyboard,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Keyboard,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import {
-    DraggableScrollbarOverlay,
-    useDraggableScrollbar,
+  DraggableScrollbarOverlay,
+  useDraggableScrollbar,
 } from "../components/custom-scrollbar";
 import { DecorativeBackground } from "../components/decorative-background";
 import { TimePickerModal } from "../components/time-picker";
@@ -23,6 +24,7 @@ import { Colors } from "../constants/theme";
 import { useScreenDataCache } from "../hooks/use-screen-data-cache";
 import { useThemeContext } from "../hooks/use-theme-context";
 import { getMedicine, updateMedicine } from "../services/firebaseService";
+import { rescheduleTodayNotifications } from "../services/notificationService";
 
 const FREQUENCY_OPTIONS = [
   "Once Daily",
@@ -103,16 +105,15 @@ const isSameIsoDate = (left: string, right: string) => left === right;
 const isBetweenIsoDates = (value: string, start: string, end: string) =>
   value > start && value < end;
 
-const countWords = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
+const countChars = (value: string) => {
+  if (!value) return 0;
+  return value.length;
 };
 
-const limitWords = (value: string, maxWords: number) => {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return value;
-  return words.slice(0, maxWords).join(" ");
+const limitChars = (value: string, maxChars: number) => {
+  if (!value) return "";
+  if (value.length <= maxChars) return value;
+  return value.slice(0, maxChars);
 };
 
 const normalizeDosage = (value: string) => value.replace(/[^0-9]/g, "");
@@ -134,6 +135,7 @@ export default function EditMedicineScreen() {
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams();
   const medicineId = String(params.medicineId ?? "");
   const scrollbar = useDraggableScrollbar();
@@ -141,6 +143,8 @@ export default function EditMedicineScreen() {
     medicineById,
     medicineLoadedVersionById,
     medicineVersion,
+    homeLogs,
+    setHomeLogs,
     setMedicine: setCachedMedicine,
     invalidateMedicationData,
   } = useScreenDataCache();
@@ -163,13 +167,17 @@ export default function EditMedicineScreen() {
   );
   const [medicineTimes, setMedicineTimes] = useState<string[]>([]);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   const formattedStartDate = useMemo(
     () => formatDateLabel(startDate),
     [startDate],
   );
   const formattedEndDate = useMemo(() => formatDateLabel(endDate), [endDate]);
-  const notesWordCount = useMemo(() => countWords(notes), [notes]);
+  const notesCharCount = useMemo(() => countChars(notes), [notes]);
 
   const selectedDateLabel = useMemo(() => {
     if (!startDate) return "Select Start Date";
@@ -232,8 +240,8 @@ export default function EditMedicineScreen() {
         setMedicineTimes(Array.isArray(medicine.times) ? medicine.times : []);
         setImageUri(medicine.imageUri ?? null);
         setCachedMedicine(medicineId, {
-          id: medicineId,
           ...medicine,
+          id: medicineId,
         });
       } catch (error) {
         console.error("Failed to load medicine for editing", error);
@@ -260,7 +268,7 @@ export default function EditMedicineScreen() {
   };
 
   const handleNotesChange = (value: string) => {
-    setNotes(limitWords(value, 60));
+    setNotes(limitChars(value, 60));
   };
 
   const openDateModal = () => {
@@ -357,6 +365,7 @@ export default function EditMedicineScreen() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!medicineId) return;
 
     const dosageValue = dosage ? `${dosage}mg` : "";
@@ -385,13 +394,54 @@ export default function EditMedicineScreen() {
       imageUri,
     };
 
-    try {
-      await updateMedicine(medicineId, updates);
-      invalidateMedicationData();
-      router.back();
-    } catch (error: any) {
-      console.error("Failed to update medicine", error);
-      Alert.alert("Error", error.message || "Failed to update medicine");
+    const previousMedicine = medicineById[medicineId] ?? null;
+    const previousHomeLogs = homeLogs;
+    const optimisticMedicine = {
+      ...(previousMedicine ?? {}),
+      ...updates,
+      id: medicineId,
+    };
+    const optimisticHomeLogs = (homeLogs ?? []).map((log) => {
+      if (log.medicineId !== medicineId) return log;
+      return {
+        ...log,
+        medicineName: name,
+        dosage: dosageValue,
+      };
+    });
+
+    setSaving(true);
+    setCachedMedicine(medicineId, optimisticMedicine as any);
+    setHomeLogs(optimisticHomeLogs as any);
+
+    void (async () => {
+      try {
+        await updateMedicine(medicineId, updates);
+        await rescheduleTodayNotifications();
+      } catch (error: any) {
+        console.error("Failed to update medicine", error);
+        if (previousMedicine) {
+          setCachedMedicine(medicineId, previousMedicine as any);
+        }
+        if (previousHomeLogs) {
+          setHomeLogs(previousHomeLogs as any);
+        }
+        Alert.alert("Error", error.message || "Failed to update medicine");
+      } finally {
+        setSaving(false);
+      }
+    })();
+
+    await sleep(1500);
+
+    if (
+      navigation &&
+      (navigation as any).canGoBack &&
+      (navigation as any).canGoBack()
+    ) {
+      (navigation as any).goBack();
+    } else {
+      router.replace("/(tabs)");
     }
   };
 
@@ -431,7 +481,21 @@ export default function EditMedicineScreen() {
       >
         <View style={styles.headerRow}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              try {
+                if (
+                  navigation &&
+                  (navigation as any).canGoBack &&
+                  (navigation as any).canGoBack()
+                ) {
+                  (navigation as any).goBack();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              } catch (err) {
+                router.replace("/(tabs)");
+              }
+            }}
             hitSlop={10}
             style={styles.backButton}
           >
@@ -504,7 +568,7 @@ export default function EditMedicineScreen() {
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: theme.text }]}>Notes</Text>
             <Text style={[styles.wordCount, { color: theme.textMuted }]}>
-              {notesWordCount} / 60 words
+              {notesCharCount} / 60 characters
             </Text>
           </View>
           <View
@@ -557,7 +621,6 @@ export default function EditMedicineScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Times list and Add Time button (editable) */}
         <View style={{ marginTop: 6 }}>
           {medicineTimes.map((t) => (
             <View key={t} style={styles.timeCard}>
@@ -663,8 +726,11 @@ export default function EditMedicineScreen() {
           style={[styles.button, { backgroundColor: theme.primary }]}
           onPress={handleSave}
           activeOpacity={0.9}
+          disabled={saving}
         >
-          <Text style={styles.buttonText}>Save Changes</Text>
+          <Text style={styles.buttonText}>
+            {saving ? "Saving..." : "Save Changes"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -1004,6 +1070,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 16 },
+  buttonDisabled: {
+    opacity: 0.75,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",

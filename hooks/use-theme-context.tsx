@@ -50,15 +50,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       console.log(`[ThemeContext] handleSetTheme called with:`, newTheme);
       if (newTheme === "system") {
         // Clear manual override and use system theme
-        await AsyncStorage.removeItem("@app_theme_preference");
         setManualOverride(null);
         setThemeState(systemTheme === "dark" ? "dark" : "light");
+        void AsyncStorage.removeItem("@app_theme_preference");
         console.log(`[ThemeContext] Set to system theme`);
       } else {
         // Set manual override
-        await AsyncStorage.setItem("@app_theme_preference", newTheme);
         setManualOverride(newTheme);
         setThemeState(newTheme);
+        void AsyncStorage.setItem("@app_theme_preference", newTheme);
         console.log(`[ThemeContext] Set to ${newTheme} theme`);
       }
     } catch (e) {

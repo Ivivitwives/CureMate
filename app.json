@@ -4,22 +4,19 @@
     "slug": "CureMate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/CureMate_logo.png",
     "scheme": "curemate",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#5B4BE0",
+        "foregroundImage": "./assets/images/CureMate_logo.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.ivy_porcado.CureMate"
     },
     "web": {
       "output": "static",
@@ -27,11 +24,12 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/CureMate_logo.png",
-          "imageWidth": 280,
+          "imageWidth": 220,
           "resizeMode": "contain",
           "backgroundColor": "#5B4BE0",
           "dark": {
@@ -43,6 +41,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c1eb8e26-d828-4d1e-8c50-c67bf557a2a2"
+      }
     }
   }
 }

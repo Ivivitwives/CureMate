@@ -5,17 +5,18 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
-  LayoutAnimation,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  UIManager,
-  View,
+    Alert,
+    LayoutAnimation,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    UIManager,
+    View,
+    useWindowDimensions,
 } from "react-native";
 
 import { Colors } from "../constants/theme";
@@ -801,6 +802,8 @@ const downloadPdfOnWeb = async (payload: {
 export default function ReportScreen() {
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme] as ThemeColors;
+  const { width } = useWindowDimensions();
+  const isCompactWidth = width < 390;
   const [selectedFilter, setSelectedFilter] =
     useState<FilterOption>("This Week");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -1204,7 +1207,12 @@ export default function ReportScreen() {
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
-          <View style={styles.chartHeader}>
+          <View
+            style={[
+              styles.chartHeader,
+              isCompactWidth && styles.chartHeaderCompact,
+            ]}
+          >
             <View>
               <Text style={[styles.chartTitle, { color: theme.text }]}>
                 {chartTitle}
@@ -1216,7 +1224,12 @@ export default function ReportScreen() {
               </Text>
             </View>
 
-            <View style={styles.legendRow}>
+            <View
+              style={[
+                styles.legendRow,
+                isCompactWidth && styles.legendRowCompact,
+              ]}
+            >
               <View style={styles.legendItem}>
                 <View
                   style={[styles.legendDot, { backgroundColor: theme.success }]}
@@ -1584,6 +1597,9 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 12,
   },
+  chartHeaderCompact: {
+    flexDirection: "column",
+  },
   chartTitle: {
     fontSize: 17,
     fontWeight: "900",
@@ -1600,6 +1616,10 @@ const styles = StyleSheet.create({
     gap: 14,
     flexWrap: "wrap",
     justifyContent: "flex-end",
+  },
+  legendRowCompact: {
+    justifyContent: "flex-start",
+    marginTop: 6,
   },
   legendItem: {
     flexDirection: "row",

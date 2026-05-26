@@ -313,11 +313,22 @@ export const addMedicine = async (medicineData: any) => {
     userId,
   };
 
-  const docRef = await addDoc(
-    collection(getDb(), "users", userId, "medicines"),
-    medicine,
-  );
+  const medicinesRef = collection(getDb(), "users", userId, "medicines");
+  const providedId = typeof medicineData.id === "string" ? medicineData.id : "";
+  const docRef = providedId ? doc(medicinesRef, providedId) : doc(medicinesRef);
+
+  await setDoc(docRef, medicine);
   return docRef.id;
+};
+
+/**
+ * Create a local medicine ID that can be used for optimistic updates.
+ */
+export const createMedicineId = () => {
+  const userId = getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+
+  return doc(collection(getDb(), "users", userId, "medicines")).id;
 };
 
 /**

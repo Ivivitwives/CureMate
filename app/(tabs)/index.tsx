@@ -1,20 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useFocusEffect } from "@react-navigation/native";
-import * as Notifications from "expo-notifications";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
-  Modal,
-  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import {
@@ -50,51 +46,17 @@ const STATUS_LABELS: Record<string, string> = {
 
 const MEDICINE_ICONS = ["medical-services", "medication", "vaccines"];
 
-const parseTimeToMinutes = (time: string) => {
-  const value = String(time ?? "").trim();
-  if (!value) return null;
+const formatTime = (value: string) => {
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number.parseInt(hourText, 10);
 
-  const match = /^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/i.exec(value);
-  if (!match) return null;
+  if (Number.isNaN(hour) || !minuteText) {
+    return value;
+  }
 
-  let hours = Number.parseInt(match[1], 10);
-  const minutes = Number.parseInt(match[2], 10);
-  const period = match[3]?.toLowerCase();
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
-
-  if (period === "pm" && hours < 12) hours += 12;
-  if (period === "am" && hours === 12) hours = 0;
-
-  return hours * 60 + minutes;
-};
-
-const formatReminderTime = (time: string) => {
-  const minutes = parseTimeToMinutes(time);
-  if (minutes == null) return time;
-
-  const hours24 = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  const period = hours24 >= 12 ? "PM" : "AM";
-  const hour12 = ((hours24 + 11) % 12) + 1;
-
-  return `${String(hour12).padStart(2, "0")}:${String(mins).padStart(
-    2,
-    "0",
-  )} ${period}`;
-};
-
-const getNextPendingLog = (logs: Log[]) => {
-  const pending = logs
-    .filter((log) => log.status !== "taken" && log.status !== "missed")
-    .map((log) => ({
-      ...log,
-      sortMinutes: parseTimeToMinutes(log.time),
-    }))
-    .filter((log) => log.sortMinutes != null)
-    .sort((left, right) => (left.sortMinutes ?? 0) - (right.sortMinutes ?? 0));
-
-  return pending[0] ?? null;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const hour12 = ((hour + 11) % 12) + 1;
+  return `${String(hour12).padStart(2, "0")}:${minuteText} ${suffix}`;
 };
 
 export default function HomeScreen() {
@@ -106,10 +68,8 @@ export default function HomeScreen() {
   const [completedCount, setCompletedCount] = useState(0);
   const [loading, setLoading] = useState(!homeLogs);
   const [refreshing, setRefreshing] = useState(false);
-  const [notifying, setNotifying] = useState(false);
-  const [reminderModalVisible, setReminderModalVisible] = useState(false);
-  const [reminderData, setReminderData] = useState<Log | null>(null);
   const router = useRouter();
+  const navigation = useNavigation();
   const scrollbar = useDraggableScrollbar();
   const { setTheme, theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
@@ -124,8 +84,9 @@ export default function HomeScreen() {
   };
 
   const loadLogs = useCallback(
-    async (options?: { force?: boolean }) => {
+    async (options?: { force?: boolean; showSpinner?: boolean }) => {
       const force = options?.force ?? false;
+      const showSpinner = options?.showSpinner ?? false;
 
       if (!force && homeLogs && homeLoadedVersion === homeVersion) {
         setLogs(homeLogs as Log[]);
@@ -133,8 +94,11 @@ export default function HomeScreen() {
         return;
       }
 
+      // When forcing a reload programmatically (e.g., on focus), avoid
+      // triggering the full-screen loading state. Only show the pull-to-refresh
+      // spinner when explicitly requested via `showSpinner: true`.
       if (force) {
-        setRefreshing(true);
+        if (showSpinner) setRefreshing(true);
       } else {
         setLoading(true);
       }
@@ -163,11 +127,25 @@ export default function HomeScreen() {
     [homeLoadedVersion, homeLogs, homeVersion, setHomeLogs],
   );
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadLogs({ force: true });
-    }, [loadLogs]),
-  );
+  useEffect(() => {
+    void loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!homeLogs) return;
+
+    setLogs(homeLogs as Log[]);
+    setLoading(false);
+  }, [homeLogs]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      void loadLogs();
+    });
+
+    return unsubscribe;
+  }, [loadLogs, navigation]);
 
   const handleMarkTaken = async (id: string) => {
     try {
@@ -195,48 +173,6 @@ export default function HomeScreen() {
       console.error(`[Home] Error switching theme:`, err);
     }
   };
-
-  const onBellPress = useCallback(async () => {
-    if (notifying) return;
-
-    const reminder = getNextPendingLog(logs);
-    if (!reminder) {
-      setReminderData(null);
-      setReminderModalVisible(true);
-      return;
-    }
-
-    const message = `You need to take ${reminder.medicineName} by ${formatReminderTime(reminder.time)}.`;
-
-    try {
-      setNotifying(true);
-
-      // show in-app reminder card immediately
-      setReminderData(reminder);
-      setReminderModalVisible(true);
-
-      // keep existing push notification scheduling intact
-      if (Platform.OS === "web") {
-        return;
-      }
-
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Medicine Reminder",
-          body: message,
-          data: { logId: reminder.id, medicineId: reminder.medicineId },
-        },
-        trigger: null,
-      });
-    } catch (error) {
-      console.error("[Home] Failed to show reminder notification:", error);
-      // still show the in-app card if scheduling fails
-      setReminderData(reminder);
-      setReminderModalVisible(true);
-    } finally {
-      setNotifying(false);
-    }
-  }, [logs, notifying]);
 
   const takenCount = logs.filter((log) => log.status === "taken").length;
   const missedCount = logs.filter((log) => log.status === "missed").length;
@@ -266,7 +202,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => {
-              void loadLogs({ force: true });
+              void loadLogs({ force: true, showSpinner: true });
             }}
             tintColor={theme.primary}
             colors={[theme.primary]}
@@ -280,13 +216,6 @@ export default function HomeScreen() {
                   Hello, {userName} 👋
                 </Text>
                 <View style={styles.headerActions}>
-                  <Pressable onPress={onBellPress} style={styles.iconButton}>
-                    <Ionicons
-                      name="notifications-outline"
-                      size={24}
-                      color={theme.primary}
-                    />
-                  </Pressable>
                   <Pressable onPress={onThemePress} style={styles.iconButton}>
                     <Ionicons
                       name={currentTheme === "dark" ? "sunny" : "moon"}
@@ -451,11 +380,11 @@ export default function HomeScreen() {
                     {item.medicineName}
                   </Text>
                   <Text style={[styles.dosage, { color: theme.textSecondary }]}>
-                    {item.dosage} • 1 Tablet
+                    {item.dosage}
                   </Text>
                 </View>
                 <Text style={[styles.time, { color: theme.textSecondary }]}>
-                  {item.time}
+                  {formatTime(item.time)}
                 </Text>
               </View>
 
@@ -536,80 +465,6 @@ export default function HomeScreen() {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       />
-
-      {/* Reminder modal card */}
-      <Modal
-        visible={reminderModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReminderModalVisible(false)}
-      >
-        <TouchableWithoutFeedback
-          onPress={() => setReminderModalVisible(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View
-                style={[
-                  styles.modalCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-              >
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  Medicine Reminder
-                </Text>
-                <Text
-                  style={[styles.modalBody, { color: theme.textSecondary }]}
-                >
-                  {reminderData
-                    ? `You need to take ${reminderData.medicineName} at ${formatReminderTime(reminderData.time)}.`
-                    : "You have no pending medicines for today."}
-                </Text>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "flex-end",
-                    marginTop: 12,
-                  }}
-                >
-                  {reminderData?.medicineId && (
-                    <TouchableOpacity
-                      style={[
-                        styles.modalButton,
-                        { backgroundColor: theme.primary, marginRight: 8 },
-                      ]}
-                      onPress={() => {
-                        setReminderModalVisible(false);
-                        blurActiveElement();
-                        router.push({
-                          pathname: "/medicine",
-                          params: { medicineId: reminderData.medicineId },
-                        });
-                      }}
-                    >
-                      <Text style={{ color: "#fff", fontWeight: "700" }}>
-                        View
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <TouchableOpacity
-                    style={styles.modalButtonOutline}
-                    onPress={() => setReminderModalVisible(false)}
-                  >
-                    <Text
-                      style={{ color: theme.textSecondary, fontWeight: "700" }}
-                    >
-                      Close
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
 
       <DraggableScrollbarOverlay {...scrollbar} />
     </View>
@@ -831,41 +686,5 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: "#FFFFFF",
     fontWeight: "700",
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  modalBody: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  modalButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  modalButtonOutline: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E5EBF4",
-    backgroundColor: "transparent",
   },
 });

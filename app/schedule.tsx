@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useNavigation } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
@@ -19,7 +20,8 @@ import { TimePickerModal } from "../components/time-picker";
 import { Colors } from "../constants/theme";
 import { useScreenDataCache } from "../hooks/use-screen-data-cache";
 import { useThemeContext } from "../hooks/use-theme-context";
-import { addMedicine } from "../services/firebaseService";
+import { addMedicine, createMedicineId } from "../services/firebaseService";
+import { rescheduleTodayNotifications } from "../services/notificationService";
 import { generateLogsForToday } from "../services/schedule";
 
 const FREQUENCY_TIMES: Record<string, string[]> = {
@@ -103,9 +105,11 @@ const timePartsToDate = (hour: string, minute: string, period: "AM" | "PM") => {
 
 export default function ScheduleScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
-  const { invalidateMedicationData } = useScreenDataCache();
+  const { homeLogs, setHomeLogs, setMedicine, invalidateMedicationData } =
+    useScreenDataCache();
   const params = useLocalSearchParams();
   const scrollbar = useDraggableScrollbar();
 
@@ -116,7 +120,11 @@ export default function ScheduleScreen() {
   const isMaintenance = String(params.isMaintenance ?? "") === "true";
   const endDate = isMaintenance ? "" : String(params.endDate ?? startDate);
   const imageUri = String(params.imageUri ?? "");
-  const notes = String(params.notes ?? "");
+  const notes = (() => {
+    if (params.notes === undefined) return null;
+    const s = String(params.notes);
+    return s.trim() === "" ? null : s;
+  })();
 
   const initialTimes = useMemo(
     () => FREQUENCY_TIMES[frequency] ?? [],
@@ -131,6 +139,45 @@ export default function ScheduleScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<"AM" | "PM">(
     seedTime.period,
   );
+  const [saving, setSaving] = useState(false);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const buildOptimisticHomeLogs = (medicineId: string) => {
+    const today = getTodayIsoDate();
+    if (startDate > today || (!isMaintenance && today > endDate)) {
+      return (homeLogs ?? []) as Array<Record<string, any>>;
+    }
+
+    const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    const remainingLogs = (homeLogs ?? []).filter(
+      (log) => log.medicineId !== medicineId,
+    );
+
+    const newLogs = times.map((time) => {
+      const [hourText, minuteText] = time.split(":");
+      const hour = Number.parseInt(hourText, 10);
+      const minute = Number.parseInt(minuteText, 10);
+      const scheduledMinutes = hour * 60 + minute;
+
+      return {
+        id: `${medicineId}_${today}_${time.replace(/[:\s]/g, "-")}`,
+        medicineId,
+        medicineName: name,
+        dosage,
+        date: today,
+        time,
+        status: scheduledMinutes <= currentMinutes ? "missed" : "pending",
+      };
+    });
+
+    return [...remainingLogs, ...newLogs].sort((left: any, right: any) => {
+      if (left.date !== right.date)
+        return String(left.date).localeCompare(String(right.date));
+      return String(left.time).localeCompare(String(right.time));
+    });
+  };
 
   const openTimeModal = () => {
     const seed = from24Hour(times[times.length - 1] ?? "08:00");
@@ -164,6 +211,7 @@ export default function ScheduleScreen() {
   };
 
   const handleSaveSchedule = async () => {
+    if (saving) return;
     if (!name || !dosage) {
       Alert.alert("Missing medicine data");
       return;
@@ -185,18 +233,39 @@ export default function ScheduleScreen() {
       notes,
       imageUri: imageUri || null,
     };
-    try {
-      await addMedicine(med);
-      const today = getTodayIsoDate();
-      if (startDate <= today && (isMaintenance || today <= endDate)) {
-        await generateLogsForToday();
+
+    const medicineId = createMedicineId();
+    const optimisticMedicine = { ...med, id: medicineId };
+    const previousHomeLogs = homeLogs;
+    const optimisticHomeLogs = buildOptimisticHomeLogs(medicineId);
+
+    setSaving(true);
+    setMedicine(medicineId, optimisticMedicine as any);
+    setHomeLogs(optimisticHomeLogs as any);
+
+    (async () => {
+      try {
+        await addMedicine(optimisticMedicine);
+
+        const today = getTodayIsoDate();
+        if (startDate <= today && (isMaintenance || today <= endDate)) {
+          await generateLogsForToday();
+        }
+        await rescheduleTodayNotifications();
+        invalidateMedicationData();
+      } catch (e: any) {
+        console.error("Error saving medicine", e);
+        if (previousHomeLogs) {
+          setHomeLogs(previousHomeLogs as any);
+        }
+        Alert.alert("Error", e.message || "Failed to save");
+      } finally {
+        setSaving(false);
       }
-      invalidateMedicationData();
-      router.replace("/(tabs)");
-    } catch (e: any) {
-      console.error("Error saving medicine", e);
-      Alert.alert("Error", e.message || "Failed to save");
-    }
+    })();
+
+    await sleep(1000);
+    router.replace("/(tabs)");
   };
 
   return (
@@ -219,7 +288,24 @@ export default function ScheduleScreen() {
         directionalLockEnabled={true}
       >
         <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable
+            onPress={() => {
+              try {
+                if (
+                  navigation &&
+                  (navigation as any).canGoBack &&
+                  (navigation as any).canGoBack()
+                ) {
+                  (navigation as any).goBack();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              } catch (err) {
+                router.replace("/(tabs)");
+              }
+            }}
+            style={styles.backButton}
+          >
             <MaterialIcons name="arrow-back" size={26} color={theme.text} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.text }]}>
@@ -252,8 +338,14 @@ export default function ScheduleScreen() {
             <Text style={styles.addTimeText}>+ Add Time</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveSchedule}>
-            <Text style={styles.saveText}>Save Schedule</Text>
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSaveSchedule}
+            disabled={saving}
+          >
+            <Text style={styles.saveText}>
+              {saving ? "Saving..." : "Save Schedule"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -328,6 +420,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 8,
+  },
+  saveBtnDisabled: {
+    opacity: 0.75,
   },
   saveText: { color: "#fff", fontWeight: "700" },
   modalOverlay: {

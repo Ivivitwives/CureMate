@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
@@ -99,16 +100,15 @@ const isSameIsoDate = (left: string, right: string) => left === right;
 const isBetweenIsoDates = (value: string, start: string, end: string) =>
   value > start && value < end;
 
-const countWords = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
+const countChars = (value: string) => {
+  if (!value) return 0;
+  return value.length;
 };
 
-const limitWords = (value: string, maxWords: number) => {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  if (words.length <= maxWords) return value;
-  return words.slice(0, maxWords).join(" ");
+const limitChars = (value: string, maxChars: number) => {
+  if (!value) return "";
+  if (value.length <= maxChars) return value;
+  return value.slice(0, maxChars);
 };
 
 export default function AddMedicineScreen() {
@@ -130,6 +130,7 @@ export default function AddMedicineScreen() {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const router = useRouter();
+  const navigation = useNavigation();
   const scrollbar = useDraggableScrollbar();
 
   const formattedStartDate = useMemo(
@@ -157,14 +158,14 @@ export default function AddMedicineScreen() {
     [calendarMonth],
   );
 
-  const notesWordCount = useMemo(() => countWords(notes), [notes]);
+  const notesCharCount = useMemo(() => countChars(notes), [notes]);
 
   const handleDosageChange = (value: string) => {
     setDosage(value.replace(/[^0-9]/g, ""));
   };
 
   const handleNotesChange = (value: string) => {
-    setNotes(limitWords(value, 60));
+    setNotes(limitChars(value, 60));
   };
 
   const handleSave = async () => {
@@ -182,13 +183,16 @@ export default function AddMedicineScreen() {
 
     // Navigate to schedule screen to allow the user to edit/add times
     // Use a query-string URL (more reliable across web/native)
+    const notesParam = notes.trim()
+      ? `&notes=${encodeURIComponent(notes.trim())}`
+      : "";
     const qs = `?name=${encodeURIComponent(name)}&dosage=${encodeURIComponent(
       dosageValue,
     )}&frequency=${encodeURIComponent(frequency)}&startDate=${encodeURIComponent(
       startDate,
     )}&endDate=${encodeURIComponent(isMaintenance ? "" : endDate || startDate)}${
       isMaintenance ? "&isMaintenance=true" : ""
-    }&notes=${encodeURIComponent(notes.trim())}`;
+    }${notesParam}`;
     const target = `/schedule${qs}`;
     console.log("Navigating to", target);
     router.push(target as `/schedule?${string}`);
@@ -253,7 +257,21 @@ export default function AddMedicineScreen() {
       >
         <View style={styles.headerRow}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              try {
+                if (
+                  navigation &&
+                  (navigation as any).canGoBack &&
+                  (navigation as any).canGoBack()
+                ) {
+                  (navigation as any).goBack();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              } catch (err) {
+                router.replace("/(tabs)");
+              }
+            }}
             hitSlop={10}
             style={styles.backButton}
           >
@@ -326,7 +344,7 @@ export default function AddMedicineScreen() {
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: theme.text }]}>Notes</Text>
             <Text style={[styles.wordCount, { color: theme.textMuted }]}>
-              {notesWordCount} / 60 words
+              {notesCharCount} / 60 characters
             </Text>
           </View>
           <View

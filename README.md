@@ -4,11 +4,313 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ## Get started
 
+<h1 align="center">
+   CureMate
+</h1>
+
+<p align="center">
+  <strong>Medication Tracking and Reminder Mobile Application</strong><br/>
+  Helping users manage medicine schedules and medication adherence.
+</p>
+
+<p align="center">
+  <img src="./assets/curemateicon.png" width="120" alt="CureMate Logo"/>
+</p>
+
+<p align="center">
+  Built with React Native · Expo · Firebase
+</p>
+
+---
+
+## Screenshots
+
+> Place your screenshots inside a `screenshots/` folder in the root of the project,
+> then replace the filenames below with your actual screenshot files.
+
+|               Splash                |               Login               |                Register                 |
+| :---------------------------------: | :-------------------------------: | :-------------------------------------: |
+| ![Splash](./screenshots/splash.jpg) | ![Login](./screenshots/login.jpg) | ![Register](./screenshots/register.jpg) |
+
+|         Home Dashboard          |                  Add Medicine                  |                  Edit Medicine                   |
+| :-----------------------------: | :--------------------------------------------: | :----------------------------------------------: |
+| ![Home](./screenshots/home.jpg) | ![Add Medicine](./screenshots/addmedicine.jpg) | ![Edit Medicine](./screenshots/editmedicine.jpg) |
+
+|                   Weekly Reports                   |                   Monthly Reports                    |                History                |
+| :------------------------------------------------: | :--------------------------------------------------: | :-----------------------------------: |
+| ![Weekly Reports](./screenshots/weeklyreports.jpg) | ![Monthly Reports](./screenshots/monthlyreports.jpg) | ![History](./screenshots/history.jpg) |
+
+|                  Notification                   |                Profile                |
+| :---------------------------------------------: | :-----------------------------------: |
+| ![Notification](./screenshots/notification.jpg) | ![Profile](./screenshots/profile.jpg) |
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Midterm vs Final Feature List](#midterm-vs-final-feature-list)
+3. [Architecture Overview](#architecture-overview)
+4. [Firebase Configuration](#firebase-configuration)
+5. [Security Rules](#security-rules)
+6. [Build Instructions](#build-instructions)
+7. [Group Members](#group-members)
+8. [References](#references)
+
+---
+
+## Overview
+
+CureMate is a mobile-based medication tracking and reminder application designed to help users manage their medicine schedules and monitor medication intake. The application allows users to add medicines, create medication schedules, receive reminder notifications, and monitor medication adherence through weekly and monthly reports.
+
+The system was developed using React Native with Expo for cross-platform mobile development and Firebase Firestore for cloud-based data storage and synchronization.
+
+---
+
+## Midterm vs Final Feature List
+
+### Midterm Features
+
+| Feature                        | Description                                  |
+| ------------------------------ | -------------------------------------------- |
+| User Registration              | Create account using email and password      |
+| User Login                     | Secure login authentication                  |
+| Home Dashboard                 | Displays daily medication schedules          |
+| Add Medicine                   | Add medicine name, dosage, and schedule      |
+| Edit Medicine                  | Modify medicine information                  |
+| Delete Medicine                | Remove medicine schedules                    |
+| Medication History             | View medicine logs                           |
+| Firebase Firestore Integration | Cloud database integration                   |
+| Basic Reports                  | Weekly medication tracking                   |
+| CRUD Operations                | Create, Read, Update, Delete functionalities |
+
+---
+
+### Final Features
+
+| Feature                    | Description                              |
+| -------------------------- | ---------------------------------------- |
+| Push Notifications         | Local medication reminder notifications  |
+| Monthly Reports            | Monthly medication summary               |
+| Real-Time Log Generation   | Automatic medication log creation        |
+| Medication Status Tracking | Taken, missed, and pending tracking      |
+| Firebase Authentication    | Secure account-based access              |
+| Firestore Security Rules   | User-specific database security          |
+| Responsive Navigation      | Faster screen transitions                |
+| Performance Optimization   | Reduced unnecessary refreshes            |
+| APK Deployment             | Android APK deployment through EAS Build |
+| Improved UI/UX             | Cleaner user interface and navigation    |
+
+---
+
+## Architecture Overview
+
+### Folder Structure
+
+```txt
+CureMate/
+│
+├── app/
+│   ├── (tabs)/
+│   ├── addMedicine.tsx
+│   ├── editMedicine.tsx
+│   ├── reports.tsx
+│   ├── history.tsx
+│   └── profile.tsx
+│
+├── components/
+│
+├── services/
+│   ├── firebaseService.ts
+│   ├── notificationService.ts
+│   └── scheduleService.ts
+│
+├── constants/
+│
+├── firebaseConfig.ts
+│
+├── assets/
+│
+└── package.json
+```
+
+---
+
+### State Management Approach
+
+CureMate uses React Hooks and component-based state management.
+
+#### Technologies Used:
+
+- useState
+- useEffect
+- useFocusEffect
+
+Firestore is used for cloud-based data synchronization while local state handles UI updates and navigation behavior.
+
+---
+
+### Navigation Structure
+
+```txt
+Login/Register
+       ↓
+Home Dashboard
+ ├── Add Medicine
+ ├── Reports
+ ├── History
+ └── Profile
+```
+
+---
+
+## Firebase Configuration
+
+Firebase configuration is stored separately inside `firebaseConfig.ts`.
+
+Sensitive Firebase credentials are not directly exposed inside application screens or public repositories.
+
+### Firebase Services Used
+
+| Service                 | Purpose                       |
+| ----------------------- | ----------------------------- |
+| Firebase Authentication | User login and authentication |
+| Firebase Firestore      | Cloud database                |
+| Expo Notifications      | Push notifications            |
+
+---
+
+## Security Rules
+
+CureMate uses Firebase Firestore Security Rules to protect user data.
+
+### Key Security Features
+
+- Only authenticated users can access the database
+- Users can only access their own medication records
+- Unauthorized access is restricted
+
+### Example Security Rule
+
+```js
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+                          && request.auth.uid == userId;
+
+      match /{document=**} {
+        allow read, write: if request.auth != null
+                            && request.auth.uid == userId;
+      }
+    }
+  }
+}
+```
+
+---
+
+## Build Instructions
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+---
+
+### 2. Install AsyncStorage
+
+```bash
+npx expo install @react-native-async-storage/async-storage
+```
+
+---
+
+### 3. Install EAS CLI
+
+```bash
+npm install -g eas-cli
+```
+
+---
+
+### 4. Login to Expo
+
+```bash
+eas login
+```
+
+---
+
+### 5. Configure EAS Build
+
+```bash
+eas build:configure
+```
+
+---
+
+### 6. Start Development Server
+
+```bash
+npx expo start
+```
+
+---
+
+### 7. Build Android APK
+
+```bash
+eas build --platform android --profile preview
+```
+
+---
+
+## Group Members
+
+| Name           | Role                      |
+| -------------- | ------------------------- |
+| Ivy Porcado    | Developer / Documentation |
+| Robylyn Flores | Member                    |
+
+---
+
+## References
+
+- Firebase Documentation  
+  https://firebase.google.com/docs
+
+- React Native Documentation  
+  https://reactnative.dev/docs/getting-started
+
+- Expo Documentation  
+  https://docs.expo.dev
+
+- Expo Notifications  
+  https://docs.expo.dev/versions/latest/sdk/notifications/
+
+- EAS Build Documentation  
+  https://docs.expo.dev/build/introduction/
+
+- Firestore Security Rules Documentation  
+  https://firebase.google.com/docs/firestore/security/get-started
+
+---
+
+<p align="center">
+  Built using React Native + Expo + Firebase<br/>
+  <em>ADET 2 — App Development and Emerging Technologies</em>
+</p>
 1. Install dependencies
 
-   ```bash
-   npm install
-   ```
+```bash
+npm install
+```
 
 2. Start the app
 

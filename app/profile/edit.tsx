@@ -1,113 +1,40 @@
 import { Colors } from "@/constants/theme";
 import { useThemeContext } from "@/hooks/use-theme-context";
 import { MaterialIcons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { updateProfile } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { auth } from "../../firebaseConfig";
-import {
-  getUserProfile,
-  uploadProfileImage,
-} from "../../services/firebaseService";
 
 export default function EditProfileScreen({
   onClose,
-  onProfileImageUpdated,
 }: {
   onClose: () => void;
-  onProfileImageUpdated?: (uri: string) => void;
 }) {
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
 
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    let active = true;
-
     const loadProfile = async () => {
       const user = auth.currentUser;
       if (!user) return;
 
       setUsername(user.displayName ?? "");
-      setEmail(user.email ?? "");
-
-      try {
-        const profile = (await getUserProfile(user.uid)) as {
-          profileImage?: string | null;
-        } | null;
-        if (!active) return;
-
-        const savedImage =
-          typeof profile?.profileImage === "string" && profile.profileImage
-            ? profile.profileImage
-            : (user.photoURL ?? null);
-
-        setProfileImageUri(savedImage);
-      } catch (error) {
-        console.warn("Error loading profile image:", error);
-        if (active) {
-          setProfileImageUri(user.photoURL ?? null);
-        }
-      }
     };
 
     void loadProfile();
-
-    return () => {
-      active = false;
-    };
   }, []);
-
-  const handlePickImage = async () => {
-    try {
-      if (Platform.OS !== "web") {
-        const permission =
-          await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-        if (!permission.granted) {
-          Alert.alert(
-            "Permission required",
-            "Please allow photo library access to change your profile picture.",
-          );
-          return;
-        }
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (result.canceled || !result.assets?.length) {
-        return;
-      }
-
-      if (result.assets[0]) {
-        setProfileImageUri(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error picking image:", error);
-      Alert.alert("Error", "Could not pick image.");
-    }
-  };
 
   const handleSaveChanges = async () => {
     const user = auth.currentUser;
@@ -121,35 +48,12 @@ export default function EditProfileScreen({
       return;
     }
 
-    console.log("EditProfile: saving", { username, profileImageUri });
+    console.log("EditProfile: saving", { username });
     setLoading(true);
     try {
-      let photoURL: string | undefined = user.photoURL ?? undefined;
-
-      if (profileImageUri && !profileImageUri.startsWith("http")) {
-        if (Platform.OS === "web") {
-          Alert.alert(
-            "Web preview only",
-            "Profile photo upload is available on native builds. Your name was saved, but the new photo cannot be uploaded from the web dev server.",
-          );
-        } else {
-          photoURL = await uploadProfileImage(profileImageUri as string);
-        }
-      }
-
-      if (photoURL) {
-        onProfileImageUpdated?.(photoURL);
-      }
-
-      const profileUpdates: { displayName: string; photoURL?: string } = {
+      const profileUpdates: { displayName: string } = {
         displayName: username.trim(),
       };
-
-      if (photoURL) {
-        profileUpdates.photoURL = photoURL;
-      } else if (user.photoURL) {
-        profileUpdates.photoURL = user.photoURL;
-      }
 
       await updateProfile(user, profileUpdates);
 
@@ -175,52 +79,15 @@ export default function EditProfileScreen({
         ]}
       >
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>
-            Edit Profile
-          </Text>
+          <Text style={[styles.title, { color: theme.text }]}>Edit Name</Text>
           <Pressable onPress={onClose}>
             <MaterialIcons name="close" size={24} color={theme.text} />
           </Pressable>
         </View>
 
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Profile Picture Section */}
-          <View style={styles.pictureSection}>
-            <View
-              style={[
-                styles.pictureContainer,
-                { backgroundColor: theme.primarySoft },
-              ]}
-            >
-              {profileImageUri ? (
-                <Image
-                  source={{ uri: profileImageUri }}
-                  style={styles.profileImage}
-                />
-              ) : (
-                <MaterialIcons name="person" size={64} color={theme.primary} />
-              )}
-            </View>
-            <Pressable
-              style={[styles.cameraButton, { backgroundColor: theme.primary }]}
-              onPress={handlePickImage}
-            >
-              <MaterialIcons name="camera-alt" size={16} color="#fff" />
-            </Pressable>
-          </View>
-          <Text style={[styles.pictureTip, { color: theme.textMuted }]}>
-            Tap to change profile picture
-          </Text>
-
-          {/* Username Field */}
+        <View style={styles.contentContainer}>
           <View style={styles.fieldSection}>
-            <Text style={[styles.fieldLabel, { color: theme.text }]}>
-              Username
-            </Text>
+            <Text style={[styles.fieldLabel, { color: theme.text }]}>Name</Text>
             <View
               style={[
                 styles.inputField,
@@ -238,7 +105,7 @@ export default function EditProfileScreen({
               />
               <TextInput
                 style={[styles.input, { color: theme.text }]}
-                placeholder="Username"
+                placeholder="Your name"
                 placeholderTextColor={theme.textMuted}
                 value={username}
                 onChangeText={setUsername}
@@ -246,38 +113,7 @@ export default function EditProfileScreen({
               />
             </View>
           </View>
-
-          {/* Email Field */}
-          <View style={styles.fieldSection}>
-            <Text style={[styles.fieldLabel, { color: theme.text }]}>
-              Email
-            </Text>
-            <View
-              style={[
-                styles.inputField,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              <MaterialIcons
-                name="email"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.textMuted }]}
-                value={email}
-                editable={false}
-              />
-            </View>
-            <Text style={[styles.emailNote, { color: theme.textMuted }]}>
-              Email cannot be changed
-            </Text>
-          </View>
-        </ScrollView>
+        </View>
 
         {/* Buttons */}
         <View style={styles.buttonRow}>
@@ -348,52 +184,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
-  content: {
-    paddingHorizontal: 20,
-    paddingVertical: 0,
-    flexGrow: 0,
-  },
   contentContainer: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-  },
-  pictureSection: {
-    alignItems: "center",
-    marginBottom: 24,
-    position: "relative",
-  },
-  pictureContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#DAD6FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  profileImage: {
-    width: "100%",
-    height: "100%",
-  },
-  cameraButton: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#6C5CE7",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  pictureTip: {
-    textAlign: "center",
-    fontSize: 13,
-    color: "#999",
-    marginBottom: 20,
   },
   fieldSection: {
     marginBottom: 18,
@@ -420,11 +213,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: "#222838",
-  },
-  emailNote: {
-    fontSize: 12,
-    color: "#999",
-    marginTop: 6,
   },
   buttonRow: {
     flexDirection: "row",

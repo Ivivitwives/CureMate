@@ -8,11 +8,13 @@ import { StatusBar } from "expo-status-bar";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/theme";
 import { ScreenDataCacheProvider } from "@/hooks/use-screen-data-cache";
 import { ThemeProvider, useThemeContext } from "@/hooks/use-theme-context";
 import { auth } from "../firebaseConfig";
+import { rescheduleTodayNotifications } from "../services/notificationService";
 import { checkAndResetDay } from "../services/schedule";
 
 export const unstable_settings = {
@@ -31,6 +33,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const syncReminders = async () => {
+      try {
+        await checkAndResetDay();
+        await rescheduleTodayNotifications();
+      } catch (error) {
+        console.warn("Failed to sync notifications", error);
+      }
+    };
+
+    void syncReminders();
+  }, [user]);
 
   useEffect(() => {
     if (user === undefined) {
@@ -56,8 +75,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       !inMedicineScreens &&
       !inTermsScreen
     ) {
-      // When user logs in, check and reset daily logs
-      checkAndResetDay().catch(console.error);
       router.replace("/(tabs)");
     }
   }, [router, segments, user]);
@@ -75,37 +92,44 @@ function RootLayoutInner() {
 
   return (
     <NavThemeProvider value={theme === "dark" ? DarkTheme : DefaultTheme}>
-      <ScreenDataCacheProvider>
-        <AuthGate>
-          <Stack>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="schedule" options={{ headerShown: false }} />
-            <Stack.Screen name="medicine" options={{ headerShown: false }} />
-            <Stack.Screen name="editMeds" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="termOfService"
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="modal"
-              options={{ presentation: "modal", title: "Modal" }}
-            />
-          </Stack>
-        </AuthGate>
-      </ScreenDataCacheProvider>
-      <StatusBar
-        style={theme === "dark" ? "light" : "dark"}
-        backgroundColor={themeObj.background}
-      />
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: themeObj.background }}
+        edges={["top", "bottom"]}
+      >
+        <ScreenDataCacheProvider>
+          <AuthGate>
+            <Stack>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="schedule" options={{ headerShown: false }} />
+              <Stack.Screen name="medicine" options={{ headerShown: false }} />
+              <Stack.Screen name="editMeds" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="termOfService"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="modal"
+                options={{ presentation: "modal", title: "Modal" }}
+              />
+            </Stack>
+          </AuthGate>
+        </ScreenDataCacheProvider>
+        <StatusBar
+          style={theme === "dark" ? "light" : "dark"}
+          backgroundColor={themeObj.background}
+        />
+      </SafeAreaView>
     </NavThemeProvider>
   );
 }
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <RootLayoutInner />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <RootLayoutInner />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

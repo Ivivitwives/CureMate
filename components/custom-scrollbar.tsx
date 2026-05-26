@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Animated,
-    PanResponder,
-    Platform,
-    StyleSheet,
-    View,
-    type LayoutChangeEvent,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent
+  Animated,
+  PanResponder,
+  StyleSheet,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -264,69 +262,8 @@ type DraggableScrollbarOverlayProps = Pick<
   | "onDragEnd"
 >;
 
-export function DraggableScrollbarOverlay({
-  thumbHeight,
-  thumbTranslateY,
-  opacity,
-  panHandlers,
-  visible,
-  onDragStart,
-  onDragToPointerY,
-  onDragEnd,
-}: DraggableScrollbarOverlayProps) {
-  const insets = useSafeAreaInsets();
-
-  if (!visible) {
-    return null;
-  }
-
-  const webDragProps =
-    Platform.OS === "web"
-      ? {
-          onResponderGrant: (event: any) => {
-            onDragStart?.(event?.nativeEvent?.pageY);
-          },
-          onResponderMove: (event: any) => {
-            onDragToPointerY?.(event?.nativeEvent?.pageY ?? 0);
-          },
-          onResponderRelease: onDragEnd,
-          onResponderTerminate: onDragEnd,
-        }
-      : {};
-
-  return (
-    <View pointerEvents="box-none" style={styles.overlay}>
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.track,
-          {
-            top: Math.max(insets.top, TRACK_TOP_MARGIN),
-            right: Math.max(insets.right, TRACK_RIGHT_MARGIN),
-            bottom:
-              Math.max(insets.bottom, TRACK_BOTTOM_SAFE_MIN) +
-              TRACK_BOTTOM_MARGIN,
-            opacity,
-          },
-        ]}
-      >
-        <Animated.View
-          {...panHandlers}
-          {...webDragProps}
-          pointerEvents="box-only"
-          style={[
-            styles.thumbHitTarget,
-            {
-              height: thumbHeight,
-              transform: [{ translateY: thumbTranslateY }],
-            },
-          ]}
-        >
-          <View style={styles.thumb} />
-        </Animated.View>
-      </Animated.View>
-    </View>
-  );
+export function DraggableScrollbarOverlay({}: DraggableScrollbarOverlayProps) {
+  return null;
 }
 
 const styles = StyleSheet.create({

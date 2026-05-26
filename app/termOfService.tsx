@@ -1,15 +1,16 @@
 import { Colors } from "@/constants/theme";
 import { useThemeContext } from "@/hooks/use-theme-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+    type ViewStyle,
 } from "react-native";
 
 type Section = {
@@ -60,6 +61,7 @@ const SECTIONS: Section[] = [
 
 export default function TermsOfService() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
 
@@ -96,7 +98,21 @@ export default function TermsOfService() {
 
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => {
+            try {
+              if (
+                navigation &&
+                (navigation as any).canGoBack &&
+                (navigation as any).canGoBack()
+              ) {
+                (navigation as any).goBack();
+              } else {
+                router.replace("/(tabs)");
+              }
+            } catch (err) {
+              router.replace("/(tabs)");
+            }
+          }}
           style={({ pressed }) => [
             styles.back,
             {
@@ -305,7 +321,21 @@ export default function TermsOfService() {
           />
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              try {
+                if (
+                  navigation &&
+                  (navigation as any).canGoBack &&
+                  (navigation as any).canGoBack()
+                ) {
+                  (navigation as any).goBack();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              } catch (err) {
+                router.replace("/(tabs)");
+              }
+            }}
             style={({ pressed }) => [
               styles.returnButton,
               {

@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useNavigation } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -21,6 +22,7 @@ import { auth } from "../firebaseConfig";
 import { useScreenDataCache } from "../hooks/use-screen-data-cache";
 import { useThemeContext } from "../hooks/use-theme-context";
 import { deleteMedicine, getMedicine } from "../services/firebaseService";
+import { rescheduleTodayNotifications } from "../services/notificationService";
 
 type Medicine = {
   id: string;
@@ -66,6 +68,7 @@ const formatFrequency = (frequency?: string) => {
 
 export default function MedicineScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { theme: currentTheme } = useThemeContext();
   const theme = Colors[currentTheme];
   const params = useLocalSearchParams();
@@ -74,13 +77,16 @@ export default function MedicineScreen() {
     medicineById,
     medicineLoadedVersionById,
     medicineVersion,
+    homeLogs,
+    setHomeLogs,
     setMedicine: setCachedMedicine,
     invalidateMedicationData,
   } = useScreenDataCache();
-  const [medicine, setMedicine] = useState<Medicine | null>(
+  const [medicine, setMedicineState] = useState<Medicine | null>(
     (medicineById[medicineId] as Medicine | null | undefined) ?? null,
   );
   const [loading, setLoading] = useState(!medicineById[medicineId]);
+  const [deleting, setDeleting] = useState(false);
   const scrollbar = useDraggableScrollbar();
 
   const blurActiveElement = () => {
@@ -99,7 +105,7 @@ export default function MedicineScreen() {
       const loadedVersion = medicineLoadedVersionById[medicineId] ?? -1;
 
       if (!force && cached && loadedVersion === medicineVersion) {
-        setMedicine(cached);
+        setMedicineState(cached);
         setLoading(false);
         return;
       }
@@ -108,12 +114,12 @@ export default function MedicineScreen() {
 
       try {
         if (!medicineId) {
-          setMedicine(null);
+          setMedicineState(null);
           return;
         }
 
         const data = (await getMedicine(medicineId)) as Medicine | null;
-        setMedicine(data);
+        setMedicineState(data);
         setCachedMedicine(medicineId, data as any);
       } catch (error) {
         console.error("Failed to load medicine", error);
@@ -168,6 +174,7 @@ export default function MedicineScreen() {
 
   const handleDeleteConfirmed = async (medicineName: string) => {
     console.log("[MedicineScreen] Delete confirmed");
+    if (deleting) return;
     try {
       blurActiveElement();
       console.log(
@@ -188,10 +195,52 @@ export default function MedicineScreen() {
         return;
       }
       console.log("[MedicineScreen] Calling deleteMedicine...");
-      await deleteMedicine(medicineId);
-      invalidateMedicationData();
-      console.log("[MedicineScreen] Delete succeeded, navigating back...");
-      router.back();
+
+      const previousHomeLogs = homeLogs;
+      const optimisticHomeLogs = (homeLogs ?? []).filter(
+        (log) => log.medicineId !== medicineId,
+      );
+
+      setDeleting(true);
+      setCachedMedicine(medicineId, null);
+      setHomeLogs(optimisticHomeLogs as any);
+
+      try {
+        // Prefer navigation.goBack when available, otherwise navigate to root.
+        if (
+          navigation &&
+          (navigation as any).canGoBack &&
+          (navigation as any).canGoBack()
+        ) {
+          (navigation as any).goBack();
+        } else {
+          router.replace("/(tabs)");
+        }
+      } catch (err) {
+        router.replace("/(tabs)");
+      }
+
+      (async () => {
+        try {
+          await deleteMedicine(medicineId);
+          await rescheduleTodayNotifications();
+        } catch (error: any) {
+          console.error("[MedicineScreen] Delete medicine failed:", error);
+          if (previousHomeLogs) {
+            setHomeLogs(previousHomeLogs as any);
+          }
+          if (medicine) {
+            setCachedMedicine(medicineId, medicine as any);
+          }
+          if (Platform.OS === "web") {
+            alert(`Error: ${error.message || "Failed to delete medicine"}`);
+          } else {
+            Alert.alert("Error", error.message || "Failed to delete medicine");
+          }
+        } finally {
+          setDeleting(false);
+        }
+      })();
     } catch (error: any) {
       console.error("[MedicineScreen] Delete medicine failed:", error);
       if (Platform.OS === "web") {
@@ -229,7 +278,19 @@ export default function MedicineScreen() {
           <Pressable
             onPress={() => {
               blurActiveElement();
-              router.back();
+              try {
+                if (
+                  navigation &&
+                  (navigation as any).canGoBack &&
+                  (navigation as any).canGoBack()
+                ) {
+                  (navigation as any).goBack();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              } catch (err) {
+                router.replace("/(tabs)");
+              }
             }}
             style={styles.iconButton}
           >
@@ -245,7 +306,7 @@ export default function MedicineScreen() {
           {loading ? "Loading..." : medicine?.name || "Medicine"}
         </Text>
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          {medicine?.dosage ? `${medicine.dosage} • 1 Tablet` : "No dosage set"}
+          {medicine?.dosage ? `${medicine.dosage}` : "No dosage set"}
         </Text>
 
         <View style={styles.infoBlock}>
@@ -253,7 +314,7 @@ export default function MedicineScreen() {
             theme={theme}
             label="Frequency"
             value={formatFrequency(medicine?.frequency)}
-            icon="notifications-none"
+            icon="repeat"
           />
           <InfoRow
             theme={theme}
@@ -301,11 +362,13 @@ export default function MedicineScreen() {
                 backgroundColor: theme.surface,
                 borderColor: theme.danger,
               },
+              deleting && styles.buttonDisabled,
             ]}
             onPress={handleDelete}
+            disabled={deleting}
           >
             <Text style={[styles.deleteText, { color: theme.danger }]}>
-              Delete
+              {deleting ? "Deleting..." : "Delete"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -418,4 +481,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   deleteText: { fontSize: 16, fontWeight: "700" },
+  buttonDisabled: {
+    opacity: 0.75,
+  },
 });
