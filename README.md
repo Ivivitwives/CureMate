@@ -14,7 +14,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 </p>
 
 <p align="center">
-  <img src="./assets/curemateicon.png" width="120" alt="CureMate Logo"/>
+  <img src="./assets/CureMate_logo.png" width="120" alt="CureMate Logo"/>
 </p>
 
 <p align="center">
@@ -28,21 +28,22 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 > Place your screenshots inside a `screenshots/` folder in the root of the project,
 > then replace the filenames below with your actual screenshot files.
 
-|               Splash                |               Login               |                Register                 |
-| :---------------------------------: | :-------------------------------: | :-------------------------------------: |
-| ![Splash](./screenshots/splash.jpg) | ![Login](./screenshots/login.jpg) | ![Register](./screenshots/register.jpg) |
+|             Splash             |            Login             |              Register              |
+| :----------------------------: | :--------------------------: | :--------------------------------: |
+| ![Splash](./assets/splash.png) | ![Login](./assets/login.png) | ![Register](./assets/register.png) |
 
-|         Home Dashboard          |                  Add Medicine                  |                  Edit Medicine                   |
-| :-----------------------------: | :--------------------------------------------: | :----------------------------------------------: |
-| ![Home](./screenshots/home.jpg) | ![Add Medicine](./screenshots/addmedicine.jpg) | ![Edit Medicine](./screenshots/editmedicine.jpg) |
+|       Home Dashboard       |            Add Medicine             | Edit Medicine |
+| :------------------------: | :---------------------------------: | :-----------: |
+| ![Home](./assets/home.png) |    ![Add Medicine](./assets/add     |
+|           .png)            | ![Edit Medicine](./assets/edit.png) |
 
-|                   Weekly Reports                   |                   Monthly Reports                    |                History                |
-| :------------------------------------------------: | :--------------------------------------------------: | :-----------------------------------: |
-| ![Weekly Reports](./screenshots/weeklyreports.jpg) | ![Monthly Reports](./screenshots/monthlyreports.jpg) | ![History](./screenshots/history.jpg) |
+|             Weekly Reports             |             Monthly Reports              |             History              |
+| :------------------------------------: | :--------------------------------------: | :------------------------------: |
+| ![Weekly Reports](./assets/weekly.png) | ![Monthly Reports](./assets/monthly.png) | ![History](./assets/history.png) |
 
-|                  Notification                   |                Profile                |
-| :---------------------------------------------: | :-----------------------------------: |
-| ![Notification](./screenshots/notification.jpg) | ![Profile](./screenshots/profile.jpg) |
+|                Notification                |             Profile              |
+| :----------------------------------------: | :------------------------------: |
+| ![Notification](./assets/notification.png) | ![Profile](./assets/profile.png) |
 
 ---
 
